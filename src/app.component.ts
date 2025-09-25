@@ -89,6 +89,13 @@ export class AppComponent {
 
   constructor() {
     effect(() => {
+      const pdf = this.pdfFile();
+      if (pdf) {
+        this.loadPdf(pdf);
+      }
+    });
+
+    effect(() => {
       if (this.isCropping() && this.croppingImageUrl()) {
         setTimeout(() => this.initCroppingCanvas(), 0);
       }
@@ -100,6 +107,15 @@ export class AppComponent {
             this.signaturePad.penColor = this.penColor();
             this.signaturePad.maxWidth = this.penThickness();
         }
+    });
+
+    effect(() => {
+      // Re-render the PDF page whenever the current page number changes
+      const pageNum = this.currentPage();
+      const doc = this.pdfDoc();
+      if (pageNum && doc) {
+        this.renderCurrentPage();
+      }
     });
   }
 
@@ -127,7 +143,7 @@ export class AppComponent {
     return AppComponent.pdfJsInitPromise;
   }
 
-  async onFileSelected(event: Event) {
+  onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
@@ -135,13 +151,12 @@ export class AppComponent {
       alert('Пожалуйста, выберите PDF файл.');
       return;
     }
+    this.resetApp();
     this.pdfFile.set(file);
     this.fileName.set(file.name);
-    this.signatureDataUrl.set(null);
-    this.placedSignatures.set([]);
-    this.pdfDoc.set(null);
-    this.currentPage.set(1);
-    this.totalPages.set(0);
+  }
+  
+  private async loadPdf(file: File) {
     this.isLoading.set(true);
     this.loadingMessage.set('Загрузка PDF...');
     try {
@@ -150,17 +165,18 @@ export class AppComponent {
       const pdf = await (window as any).pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       this.pdfDoc.set(pdf);
       this.totalPages.set(pdf.numPages);
-      await this.renderCurrentPage();
+      this.currentPage.set(1); // Triggers effect to render page 1
     } catch (error) {
       console.error('Error loading PDF:', error);
       alert('Не удалось загрузить PDF файл.');
+      this.resetApp();
     } finally {
       this.isLoading.set(false);
     }
   }
 
   async renderCurrentPage() {
-    if (!this.pdfDoc()) return;
+    if (!this.pdfDoc() || !this.pdfCanvas) return;
     this.isLoading.set(true);
     this.loadingMessage.set(`Отрисовка страницы ${this.currentPage()}...`);
     try {
@@ -190,14 +206,12 @@ export class AppComponent {
   goToPreviousPage() {
     if (this.currentPage() > 1) {
       this.currentPage.update(p => p - 1);
-      this.renderCurrentPage();
     }
   }
 
   goToNextPage() {
     if (this.currentPage() < this.totalPages()) {
       this.currentPage.update(p => p + 1);
-      this.renderCurrentPage();
     }
   }
 
@@ -303,7 +317,6 @@ export class AppComponent {
           }
         }
         if (maxX === -1) {
-          // If the image is fully transparent, return an empty but valid result
           resolve({ dataUrl: '', width: 0, height: 0 });
           return;
         }
@@ -344,7 +357,7 @@ export class AppComponent {
         aspectRatio: newAspectRatio
       });
       
-      this.isPlacingSignature.set(true); // Automatically enter placement mode
+      this.isPlacingSignature.set(true);
 
       this.placedSignatures.update(sigs => 
         sigs.map(s => ({
@@ -636,7 +649,6 @@ export class AppComponent {
     this.isLoading.set(true);
     this.loadingMessage.set('Автоматическая обработка...');
 
-    // Use a timeout to allow the loading spinner to render before heavy processing
     setTimeout(async () => {
         try {
             const canvas = this.croppingCanvas.nativeElement;
@@ -675,107 +687,95 @@ export class AppComponent {
     }, 10);
   }
 
+  private _colorDistance(c1: [number, number, number], c2: [number, number, number]): number {
+    const dr = c1[0] - c2[0];
+    const dg = c1[1] - c2[1];
+    const db = c1[2] - c2[2];
+    return Math.sqrt(dr * dr + dg * dg + db * db);
+  }
+
   private _removeBackgroundAutomatically(imageData: ImageData): ImageData {
     const { data, width, height } = imageData;
     if (width === 0 || height === 0) {
       return new ImageData(new Uint8ClampedArray(0), 0, 0);
     }
-    
-    const getLuminance = (r: number, g: number, b: number): number => 0.299 * r + 0.587 * g + 0.114 * b;
-    const colorDistance = (c1: [number, number, number], c2: [number, number, number]): number => {
-      return Math.sqrt(Math.pow(c1[0] - c2[0], 2) + Math.pow(c1[1] - c2[1], 2) + Math.pow(c1[2] - c2[2], 2));
-    };
-    const colorToKey = (r: number, g: number, b: number, bucketSize: number): string => {
-      return `${Math.round(r / bucketSize) * bucketSize},${Math.round(g / bucketSize) * bucketSize},${Math.round(b / bucketSize) * bucketSize}`;
-    };
 
-    // --- Step 1: Build a color histogram with luminance data ---
-    const hist = new Map<string, { color: [number, number, number]; count: number; luminance: number }>();
-    const bucketSize = 16;
-    for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] < 128) continue; // Ignore semi-transparent pixels
-        const r = data[i], g = data[i+1], b = data[i+2];
-        const key = colorToKey(r, g, b, bucketSize);
-        const entry = hist.get(key) || { color: [r, g, b], count: 0, luminance: getLuminance(r, g, b) };
-        entry.count++;
-        hist.set(key, entry);
-    }
-
-    if (hist.size < 2) {
-      // Not enough color information, return a cleared image
-      return new ImageData(new Uint8ClampedArray(data.length), width, height);
-    }
-
-    // --- Step 2: Identify dominant light (background) and dark (ink) colors ---
-    let dominantLight = { color: [255, 255, 255] as [number, number, number], count: 0, luminance: 255 };
-    let dominantDark = { color: [0, 0, 0] as [number, number, number], count: 0, luminance: 0 };
-    const luminanceThreshold = 128;
-
-    for (const entry of hist.values()) {
-        if (entry.luminance > luminanceThreshold) {
-            if (entry.count > dominantLight.count) {
-                dominantLight = entry;
-            }
-        } else {
-            if (entry.count > dominantDark.count) {
-                dominantDark = entry;
-            }
+    // --- STEP 1: Find the most dominant color, which we assume is the background paper. ---
+    const colorCounts = new Map<string, number>();
+    for (let i = 0; i < data.length; i += 8) { // Sample pixels for performance
+        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+        if (a > 200) { // Only consider opaque pixels
+            const key = `${r},${g},${b}`;
+            colorCounts.set(key, (colorCounts.get(key) || 0) + 1);
         }
     }
-
-    // Fallback: If one category is empty (e.g., white ink on black paper),
-    // find the two most frequent colors overall and classify them by luminance.
-    if (dominantLight.count === 0 || dominantDark.count === 0) {
-        const sortedColors = [...hist.values()].sort((a, b) => b.count - a.count);
-        const color1 = sortedColors[0];
-        const color2 = sortedColors[1] || { color: color1.luminance > luminanceThreshold ? [0,0,0] : [255,255,255], count: 0, luminance: color1.luminance > luminanceThreshold ? 0 : 255 };
-        
-        if (color1.luminance > color2.luminance) {
-            dominantLight = color1;
-            dominantDark = color2;
-        } else {
-            dominantLight = color2;
-            dominantDark = color1;
-        }
+    let backgroundColor: [number, number, number] = [255, 255, 255]; // Default to white
+    if (colorCounts.size > 0) {
+        const mostFrequent = [...colorCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        backgroundColor = mostFrequent.split(',').map(Number) as [number, number, number];
     }
     
-    const signatureColor = dominantDark.color;
-    const backgroundColor = dominantLight.color;
-    
-    // --- Step 3: Rebuild the image, preserving only the signature ---
+    // --- STEP 2: Find a "seed" point for the signature ink color. ---
+    // We spiral out from the center to find the first pixel that is significantly
+    // different from the background. This is our best guess for the signature's color.
+    let signatureInkColor: [number, number, number] | null = null;
+    const centerX = Math.floor(width / 2);
+    const centerY = Math.floor(height / 2);
+
+    for (let r = 0; r < Math.max(centerX, centerY); r++) {
+        // Iterate over a circular path for the given radius
+        const numPoints = r === 0 ? 1 : Math.ceil(2 * Math.PI * r);
+        for (let i = 0; i < numPoints; i++) {
+            const angle = (i / numPoints) * 2 * Math.PI;
+            const x = Math.floor(centerX + r * Math.cos(angle));
+            const y = Math.floor(centerY + r * Math.sin(angle));
+
+            if (x >= 0 && x < width && y >= 0 && y < height) {
+                const idx = (y * width + x) * 4;
+                const a = data[idx+3];
+                if (a > 128) { // Make sure the pixel is visible
+                    const currentColor: [number, number, number] = [data[idx], data[idx+1], data[idx+2]];
+                    if (this._colorDistance(currentColor, backgroundColor) > 40) { // Must be different enough from paper
+                        signatureInkColor = currentColor;
+                        break;
+                    }
+                }
+            }
+        }
+        if (signatureInkColor) break;
+    }
+
+    // If no ink color is found (e.g., blank image), return a transparent image.
+    if (!signatureInkColor) {
+        console.warn("Could not find signature ink color.");
+        return new ImageData(new Uint8ClampedArray(data.length), width, height);
+    }
+
+    // --- STEP 3: The Revolutionary Part - Chroma Keying ---
+    // We create a new image. A pixel is kept only if its color is very similar
+    // to the signature ink color we found. Everything else becomes transparent.
     const newData = new Uint8ClampedArray(data.length);
-    const transparentThreshold = 90;
-    const opaqueThreshold = 45;
+    const colorThreshold = 90; // This is the crucial tuning parameter. Higher = more permissive.
     
     for (let i = 0; i < data.length; i += 4) {
         const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-        if (a < 25) continue; // Skip already transparent pixels
+        
+        if (a < 100) continue; 
 
         const currentPixelColor: [number, number, number] = [r, g, b];
-        const distToSignature = colorDistance(currentPixelColor, signatureColor);
-        const distToBackground = colorDistance(currentPixelColor, backgroundColor);
-
-        // If a pixel is much closer to the background color than the signature, discard it.
-        if (distToBackground < distToSignature && distToBackground < transparentThreshold * 1.5) {
-            newData[i+3] = 0;
-            continue;
-        }
-
-        let newAlpha = 0;
-        if (distToSignature <= opaqueThreshold) {
-            newAlpha = a; // Fully opaque
-        } else if (distToSignature < transparentThreshold) {
-            // Feather the edges by scaling alpha based on distance to the signature color
-            const alphaFactor = 1 - ((distToSignature - opaqueThreshold) / (transparentThreshold - opaqueThreshold));
-            newAlpha = a * alphaFactor;
-        }
+        const distToInk = this._colorDistance(currentPixelColor, signatureInkColor);
         
-        if (newAlpha > 10) { // Only write pixels that will be somewhat visible
-            newData[i] = r;
-            newData[i+1] = g;
-            newData[i+2] = b;
-            newData[i+3] = newAlpha;
+        // This is the core logic: if the pixel's color is close to the ink color, we keep it.
+        // This effectively ignores other elements like black text, which will have a high color distance.
+        if (distToInk < colorThreshold) {
+             const alphaFactor = Math.max(0, 1 - (distToInk / colorThreshold));
+             newData[i] = r;
+             newData[i+1] = g;
+             newData[i+2] = b;
+             // We square the alpha factor to make the edges fade more sharply, which looks cleaner.
+             newData[i+3] = a * (alphaFactor * alphaFactor);
         }
+        // By default, pixels in newData are transparent (alpha=0), so we don't need an else case.
     }
     
     return new ImageData(newData, width, height);
@@ -805,6 +805,8 @@ export class AppComponent {
   }
 
   togglePlacementMode() {
-    this.isPlacingSignature.update(v => !v);
+    if (this.signatureDataUrl()) {
+      this.isPlacingSignature.update(v => !v);
+    }
   }
 }
