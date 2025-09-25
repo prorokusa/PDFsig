@@ -55,7 +55,20 @@ export class AppComponent {
   isSigning = signal<boolean>(false);
   isCropping = signal<boolean>(false);
   croppingImageUrl = signal<string | null>(null);
+  isHelpVisible = signal<boolean>(false);
+  isPlacingSignature = signal<boolean>(false);
   
+  // --- Signature Settings Signals ---
+  penColor = signal<string>('rgb(79, 70, 229)'); // Default Indigo
+  penThickness = signal<number>(1.0); // Default thickness
+  
+  availablePenColors = [
+    'rgb(79, 70, 229)',  // Indigo
+    'rgb(15, 23, 42)',   // Slate-900 (Black)
+    'rgb(220, 38, 38)',  // Red-600
+    'rgb(5, 150, 105)'   // Emerald-600
+  ];
+
   isLoading = signal<boolean>(false);
   loadingMessage = signal<string>('');
   
@@ -79,6 +92,14 @@ export class AppComponent {
       if (this.isCropping() && this.croppingImageUrl()) {
         setTimeout(() => this.initCroppingCanvas(), 0);
       }
+    });
+
+    // Effect to update signature pad settings in real-time
+    effect(() => {
+        if (this.signaturePad) {
+            this.signaturePad.penColor = this.penColor();
+            this.signaturePad.maxWidth = this.penThickness();
+        }
     });
   }
 
@@ -198,9 +219,9 @@ export class AppComponent {
         canvas.height = canvas.offsetHeight * ratio;
         canvas.getContext('2d')?.scale(ratio, ratio);
         this.signaturePad = new (window as any).SignaturePad(canvas, {
-          penColor: 'rgb(29, 78, 216)', // Tailwind's blue-700
+          penColor: this.penColor(),
           minWidth: 0.25,
-          maxWidth: 1.0,
+          maxWidth: this.penThickness(),
         });
     }
   }
@@ -322,6 +343,8 @@ export class AppComponent {
         height: processed.height,
         aspectRatio: newAspectRatio
       });
+      
+      this.isPlacingSignature.set(true); // Automatically enter placement mode
 
       this.placedSignatures.update(sigs => 
         sigs.map(s => ({
@@ -336,11 +359,11 @@ export class AppComponent {
     if (this.interactionOccurred) return;
     if ((event.target as HTMLElement).closest('.signature-wrapper')) return;
 
-    if (this.signatureDataUrl() && !this.draggedSignature() && this.trimmedSignatureSize()) {
+    if (this.isPlacingSignature() && this.signatureDataUrl() && this.trimmedSignatureSize()) {
       const sizeInfo = this.trimmedSignatureSize()!;
       
       const canvasElement = this.pdfCanvas.nativeElement;
-      const defaultWidth = canvasElement.offsetWidth * 0.20;
+      const defaultWidth = canvasElement.offsetWidth * 0.15;
       const defaultHeight = defaultWidth / sizeInfo.aspectRatio;
 
       const viewer = event.currentTarget as HTMLElement;
@@ -507,6 +530,16 @@ export class AppComponent {
     setTimeout(() => { this.interactionOccurred = false; }, 0);
   }
   
+  // --- Signature Settings Methods ---
+  setPenColor(color: string) {
+    this.penColor.set(color);
+  }
+
+  setPenThickness(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    this.penThickness.set(parseFloat(value));
+  }
+
   // --- Cropping Logic ---
   initCroppingCanvas() {
     if (!this.croppingCanvas) return;
@@ -642,7 +675,6 @@ export class AppComponent {
     }, 10);
   }
 
-  // --- Automatic Background Removal (Luminance-based Segmentation) ---
   private _removeBackgroundAutomatically(imageData: ImageData): ImageData {
     const { data, width, height } = imageData;
     if (width === 0 || height === 0) {
@@ -747,5 +779,32 @@ export class AppComponent {
     }
     
     return new ImageData(newData, width, height);
+  }
+
+  // --- Help Modal Methods ---
+  openHelpModal() {
+    this.isHelpVisible.set(true);
+  }
+
+  closeHelpModal() {
+    this.isHelpVisible.set(false);
+  }
+
+  // --- App State Methods ---
+  resetApp() {
+    this.pdfFile.set(null);
+    this.fileName.set('');
+    this.pdfDoc.set(null);
+    this.pdfPage.set(null);
+    this.currentPage.set(1);
+    this.totalPages.set(0);
+    this.signatureDataUrl.set(null);
+    this.placedSignatures.set([]);
+    this.trimmedSignatureSize.set(null);
+    this.isPlacingSignature.set(false);
+  }
+
+  togglePlacementMode() {
+    this.isPlacingSignature.update(v => !v);
   }
 }
