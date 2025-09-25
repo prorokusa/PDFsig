@@ -1,0 +1,5 @@
+{
+  "name": "PDF Signature Tool",
+  "description": "An application to easily sign PDF documents. Upload a PDF, draw your signature with a stylus or your finger, place it on the document, and download the signed file.",
+  "requestFramePermissions": []
+}
