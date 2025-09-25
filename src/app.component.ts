@@ -642,50 +642,110 @@ export class AppComponent {
     }, 10);
   }
 
-  // --- Automatic Background Removal (Color Segmentation) ---
+  // --- Automatic Background Removal (Luminance-based Segmentation) ---
   private _removeBackgroundAutomatically(imageData: ImageData): ImageData {
     const { data, width, height } = imageData;
+    if (width === 0 || height === 0) {
+      return new ImageData(new Uint8ClampedArray(0), 0, 0);
+    }
+    
+    const getLuminance = (r: number, g: number, b: number): number => 0.299 * r + 0.587 * g + 0.114 * b;
+    const colorDistance = (c1: [number, number, number], c2: [number, number, number]): number => {
+      return Math.sqrt(Math.pow(c1[0] - c2[0], 2) + Math.pow(c1[1] - c2[1], 2) + Math.pow(c1[2] - c2[2], 2));
+    };
+    const colorToKey = (r: number, g: number, b: number, bucketSize: number): string => {
+      return `${Math.round(r / bucketSize) * bucketSize},${Math.round(g / bucketSize) * bucketSize},${Math.round(b / bucketSize) * bucketSize}`;
+    };
 
-    // 1. Pick a seed color from the center of the image.
-    const centerX = Math.floor(width / 2);
-    const centerY = Math.floor(height / 2);
-    const centerIndex = (centerY * width + centerX) * 4;
-    const seedR = data[centerIndex];
-    const seedG = data[centerIndex + 1];
-    const seedB = data[centerIndex + 2];
-
-    const newData = new Uint8ClampedArray(data.length).fill(0);
-
-    // This threshold determines how "close" a color needs to be to the seed color to be kept.
-    // A higher value is more tolerant of color variations in the signature.
-    const colorDistanceThreshold = 80;
-
-    // 2. Iterate through all pixels and check color distance
+    // --- Step 1: Build a color histogram with luminance data ---
+    const hist = new Map<string, { color: [number, number, number]; count: number; luminance: number }>();
+    const bucketSize = 16;
     for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = data[i + 3];
-
-      // Skip fully transparent pixels from the source
-      if (a === 0) continue;
-
-      // Calculate Euclidean distance in RGB space
-      const distance = Math.sqrt(
-        Math.pow(r - seedR, 2) +
-        Math.pow(g - seedG, 2) +
-        Math.pow(b - seedB, 2)
-      );
-
-      // 3. If color is similar, copy it to the new image data
-      if (distance < colorDistanceThreshold) {
-        newData[i] = r;
-        newData[i + 1] = g;
-        newData[i + 2] = b;
-        newData[i + 3] = a; // Preserve original alpha
-      }
+        if (data[i + 3] < 128) continue; // Ignore semi-transparent pixels
+        const r = data[i], g = data[i+1], b = data[i+2];
+        const key = colorToKey(r, g, b, bucketSize);
+        const entry = hist.get(key) || { color: [r, g, b], count: 0, luminance: getLuminance(r, g, b) };
+        entry.count++;
+        hist.set(key, entry);
     }
 
+    if (hist.size < 2) {
+      // Not enough color information, return a cleared image
+      return new ImageData(new Uint8ClampedArray(data.length), width, height);
+    }
+
+    // --- Step 2: Identify dominant light (background) and dark (ink) colors ---
+    let dominantLight = { color: [255, 255, 255] as [number, number, number], count: 0, luminance: 255 };
+    let dominantDark = { color: [0, 0, 0] as [number, number, number], count: 0, luminance: 0 };
+    const luminanceThreshold = 128;
+
+    for (const entry of hist.values()) {
+        if (entry.luminance > luminanceThreshold) {
+            if (entry.count > dominantLight.count) {
+                dominantLight = entry;
+            }
+        } else {
+            if (entry.count > dominantDark.count) {
+                dominantDark = entry;
+            }
+        }
+    }
+
+    // Fallback: If one category is empty (e.g., white ink on black paper),
+    // find the two most frequent colors overall and classify them by luminance.
+    if (dominantLight.count === 0 || dominantDark.count === 0) {
+        const sortedColors = [...hist.values()].sort((a, b) => b.count - a.count);
+        const color1 = sortedColors[0];
+        const color2 = sortedColors[1] || { color: color1.luminance > luminanceThreshold ? [0,0,0] : [255,255,255], count: 0, luminance: color1.luminance > luminanceThreshold ? 0 : 255 };
+        
+        if (color1.luminance > color2.luminance) {
+            dominantLight = color1;
+            dominantDark = color2;
+        } else {
+            dominantLight = color2;
+            dominantDark = color1;
+        }
+    }
+    
+    const signatureColor = dominantDark.color;
+    const backgroundColor = dominantLight.color;
+    
+    // --- Step 3: Rebuild the image, preserving only the signature ---
+    const newData = new Uint8ClampedArray(data.length);
+    const transparentThreshold = 90;
+    const opaqueThreshold = 45;
+    
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+        if (a < 25) continue; // Skip already transparent pixels
+
+        const currentPixelColor: [number, number, number] = [r, g, b];
+        const distToSignature = colorDistance(currentPixelColor, signatureColor);
+        const distToBackground = colorDistance(currentPixelColor, backgroundColor);
+
+        // If a pixel is much closer to the background color than the signature, discard it.
+        if (distToBackground < distToSignature && distToBackground < transparentThreshold * 1.5) {
+            newData[i+3] = 0;
+            continue;
+        }
+
+        let newAlpha = 0;
+        if (distToSignature <= opaqueThreshold) {
+            newAlpha = a; // Fully opaque
+        } else if (distToSignature < transparentThreshold) {
+            // Feather the edges by scaling alpha based on distance to the signature color
+            const alphaFactor = 1 - ((distToSignature - opaqueThreshold) / (transparentThreshold - opaqueThreshold));
+            newAlpha = a * alphaFactor;
+        }
+        
+        if (newAlpha > 10) { // Only write pixels that will be somewhat visible
+            newData[i] = r;
+            newData[i+1] = g;
+            newData[i+2] = b;
+            newData[i+3] = newAlpha;
+        }
+    }
+    
     return new ImageData(newData, width, height);
   }
 }
