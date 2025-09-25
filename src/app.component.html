@@ -1,31 +1,96 @@
-<div class="flex flex-col h-screen font-sans bg-slate-100 text-slate-800">
-  <header class="flex-shrink-0 bg-white border-b border-slate-200">
+<div class="h-screen font-sans bg-gray-50 text-gray-800">
+  <header class="fixed top-0 left-0 right-0 z-40 flex-shrink-0 bg-white/80 backdrop-blur-sm border-b border-gray-200">
     <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
-        <div class="flex items-center space-x-3">
-            <svg class="w-8 h-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-            </svg>
-            <h1 class="text-xl md:text-2xl font-bold text-slate-800">PDF e-Sign</h1>
+      <div class="flex items-center justify-between h-16 gap-4">
+        <!-- Left Group: Logo & Title -->
+        <div class="flex items-center space-x-3 flex-shrink-0">
+          <svg class="w-8 h-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+          </svg>
+          <h1 class="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">PDF e-Sign</h1>
         </div>
-        <button (click)="openHelpModal()" title="Помощь" class="p-2 rounded-full text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+
+        <!-- Middle Group: File Info & Page Nav (visible on larger screens) -->
+        @if (pdfFile()) {
+        <div class="hidden md:flex items-center gap-4 flex-shrink min-w-0">
+          <!-- File Info -->
+          <div class="flex items-center gap-2 border-r border-gray-200 pr-4 min-w-0">
+            <span class="font-medium text-gray-700 truncate" [title]="fileName()">{{ fileName() }}</span>
+            <button (click)="resetApp()" title="Загрузить новый PDF" class="p-1.5 rounded-full text-gray-500 hover:bg-gray-100 hover:text-indigo-600 transition-colors flex-shrink-0">
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0m0 0-3.182-3.182m0-11.667a8.25 8.25 0 0 0-11.667 0M6.168 5.86l-3.182 3.182" />
+              </svg>
+            </button>
+          </div>
+          <!-- Page Nav -->
+          @if (totalPages() > 1) {
+          <div class="flex items-center gap-2">
+            <button (click)="goToPreviousPage()" [disabled]="currentPage() === 1" class="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+            <span class="text-sm font-medium text-gray-800 w-24 text-center">Стр. {{ currentPage() }} / {{ totalPages() }}</span>
+            <button (click)="goToNextPage()" [disabled]="currentPage() === totalPages()" class="p-2 rounded-full text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+          }
+        </div>
+        }
+
+        <!-- Spacer to push right content -->
+        <div class="flex-grow"></div>
+
+        <!-- Right Group: Actions -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          @if(pdfFile()) {
+            @if (!signatureDataUrl()) {
+              <button (click)="openSignatureModal()" class="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 transition-colors">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.26 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"></path></svg>
+                <span>Создать подпись</span>
+              </button>
+            } @else {
+               <button (click)="openSignatureModal()" title="Изменить подпись" class="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 transition-colors">
+                 <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>
+                 <span class="hidden sm:inline">Изменить</span>
+               </button>
+               <button (click)="togglePlacementMode()" [class]="isPlacingSignature() ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'" class="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md shadow-sm transition-colors" [title]="isPlacingSignature() ? 'Завершить размещение' : 'Начать размещение подписей'">
+                 @if (isPlacingSignature()) {
+                   <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                   <span class="hidden sm:inline">Готово</span>
+                 } @else {
+                   <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                   <span class="hidden sm:inline">Добавить</span>
+                 }
+               </button>
+            }
+             <button (click)="applyAndDownload()" [disabled]="placedSignatures().length === 0" class="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 border border-transparent rounded-md shadow-sm hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">
+               <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+               <span class="hidden sm:inline">Скачать</span>
+             </button>
+          }
+          <button (click)="openHelpModal()" title="Помощь" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-indigo-600 transition-colors">
             <svg class="w-7 h-7" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
             </svg>
-        </button>
+          </button>
+        </div>
       </div>
     </div>
   </header>
 
-  <main class="flex-grow w-full">
+  <main class="w-full h-full pt-16">
     @if (!pdfFile()) {
       <div class="h-full flex flex-col items-center justify-center p-4">
-        <label for="file-upload" class="flex flex-col items-center justify-center w-full max-w-lg p-8 text-center bg-white rounded-2xl shadow-sm border-2 border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-300 cursor-pointer">
+        <label for="file-upload" class="flex flex-col items-center justify-center w-full max-w-lg p-8 text-center bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-300 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-300 cursor-pointer">
           <svg class="w-16 h-16 text-indigo-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
           </svg>
-          <h3 class="mt-4 text-xl font-medium text-slate-900">Перетащите PDF сюда</h3>
-          <p class="mt-2 text-sm text-slate-500">или нажмите, чтобы выбрать файл</p>
+          <h3 class="mt-4 text-xl font-medium text-gray-900">Перетащите PDF сюда</h3>
+          <p class="mt-2 text-sm text-gray-500">или нажмите, чтобы выбрать файл</p>
           <span class="mt-6 inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
             Выбрать файл
           </span>
@@ -33,226 +98,170 @@
         <input type="file" id="file-upload" class="hidden" (change)="onFileSelected($event)" accept="application/pdf">
       </div>
     } @else {
-      <div class="container mx-auto h-full p-4 lg:p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6 h-full">
-          
-          <!-- PDF Viewer Area -->
-          <div class="lg:col-span-2 xl:col-span-3 h-full flex flex-col bg-white rounded-xl shadow-sm overflow-hidden">
-            <div class="flex-shrink-0 flex flex-wrap justify-between items-center p-3 border-b border-slate-200 gap-2">
-                <div class="flex items-center gap-2">
-                    <span class="font-medium text-slate-700 truncate max-w-[150px] sm:max-w-xs" [title]="fileName()">{{ fileName() }}</span>
-                    <button (click)="resetApp()" title="Загрузить новый PDF" class="p-1.5 rounded-full text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0m0 0-3.182-3.182m0-11.667a8.25 8.25 0 0 0-11.667 0M6.168 5.86l-3.182 3.182" />
-                        </svg>
-                    </button>
-                </div>
-                 @if (totalPages() > 1) {
-                    <div class="flex justify-center items-center gap-2">
-                      <button (click)="goToPreviousPage()" [disabled]="currentPage() === 1" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
-                      </button>
-                      <span class="text-sm font-medium text-slate-700 w-28 text-center">Стр. {{ currentPage() }} / {{ totalPages() }}</span>
-                      <button (click)="goToNextPage()" [disabled]="currentPage() === totalPages()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                      </button>
-                    </div>
-                }
-            </div>
-            <div class="flex-grow p-2 bg-slate-50 overflow-auto">
-              <div id="pdf-viewer" (click)="placeSignatureOnClick($event)" [class.cursor-copy]="isPlacingSignature()">
-                  <canvas #pdfCanvas id="pdf-canvas" class="rounded-md shadow-lg"></canvas>
-                  @for (sig of placedSignatures(); track sig.id) {
-                    @if (sig.page === currentPage()) {
-                      <div class="signature-wrapper"
-                           [style.left.px]="sig.position.x"
-                           [style.top.px]="sig.position.y"
-                           [style.width.px]="sig.width"
-                           [style.height.px]="sig.height"
-                           (mousedown)="dragStart($event, sig)" 
-                           (touchstart)="dragStart($event, sig)">
-                        <img [src]="signatureDataUrl()" alt="Подпись" class="w-full h-full object-contain pointer-events-none">
-                        <div class="delete-signature-btn" (click)="deleteSignature(sig.id, $event)" title="Удалить подпись">&times;</div>
-                        <div class="resize-handle" (mousedown)="resizeStart($event, sig)" (touchstart)="resizeStart($event, sig)"></div>
-                      </div>
-                    }
-                  }
+      <div class="container mx-auto h-full py-4 lg:py-6">
+        <div class="h-full flex flex-col bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div class="flex-grow p-2 bg-gray-100 overflow-auto relative">
+            <div id="pdf-viewer" (click)="placeSignatureOnClick($event)" [class.cursor-copy]="isPlacingSignature()">
+              <canvas #pdfCanvas id="pdf-canvas" class="rounded-lg shadow-xl"></canvas>
+              @for (sig of placedSignatures(); track sig.id) {
+              @if (sig.page === currentPage()) {
+              <div class="signature-wrapper" [style.left.px]="sig.position.x" [style.top.px]="sig.position.y" [style.width.px]="sig.width" [style.height.px]="sig.height" (mousedown)="dragStart($event, sig)" (touchstart)="dragStart($event, sig)">
+                <img [src]="signatureDataUrl()" alt="Подпись" class="w-full h-full object-contain pointer-events-none">
+                <div class="delete-signature-btn" (click)="deleteSignature(sig.id, $event)" title="Удалить подпись">&times;</div>
+                <div class="resize-handle" (mousedown)="resizeStart($event, sig)" (touchstart)="resizeStart($event, sig)"></div>
               </div>
+              }
+              }
             </div>
-             @if (isPlacingSignature()) {
-                <div class="flex-shrink-0 p-2 text-center bg-indigo-100 text-indigo-800 text-sm font-medium animate-pulse">
-                    Нажмите на документ, чтобы разместить подпись.
-                </div>
-             }
           </div>
-
-          <!-- Actions Sidebar (Desktop) -->
-          <aside class="hidden lg:flex lg:flex-col space-y-6 bg-white rounded-xl shadow-sm p-6">
-            @if (signatureDataUrl()) {
-                <div class="text-center">
-                    <h3 class="text-lg font-semibold text-slate-800 mb-3">Ваша подпись</h3>
-                    <div class="p-4 bg-slate-100 rounded-lg">
-                        <img [src]="signatureDataUrl()" alt="Предпросмотр подписи" class="max-w-full h-auto mx-auto max-h-24 object-contain">
-                    </div>
-                </div>
-                <div class="space-y-3">
-                    <button (click)="openSignatureModal()" title="Изменить подпись" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
-                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>
-                        <span>Изменить</span>
-                    </button>
-                    <button (click)="togglePlacementMode()" [class]="isPlacingSignature() ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-800'" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-transparent rounded-md shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" [title]="isPlacingSignature() ? 'Завершить размещение' : 'Начать размещение подписей'">
-                        @if (isPlacingSignature()) {
-                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                            <span>Готово</span>
-                        } @else {
-                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                            <span>Добавить</span>
-                        }
-                    </button>
-                </div>
-            } @else {
-                <button (click)="openSignatureModal()" class="w-full px-4 py-3 text-base font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">Создать подпись</button>
-            }
-
-            <div class="flex-grow"></div>
-
-            <button (click)="applyAndDownload()" [disabled]="placedSignatures().length === 0" class="w-full flex items-center justify-center gap-2 px-4 py-3 text-base font-medium text-white bg-emerald-600 border border-transparent rounded-lg shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors" title="Скачать подписанный PDF">
-             <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-             <span>Скачать</span>
-            </button>
-          </aside>
+          @if (isPlacingSignature()) {
+          <div class="flex-shrink-0 p-2 text-center bg-indigo-100 text-indigo-800 text-sm font-medium animate-pulse">
+            Нажмите на документ, чтобы разместить подпись.
+          </div>
+          }
         </div>
       </div>
-      
-      <!-- Mobile Action Bar -->
-      <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-slate-200 p-2 flex items-center justify-around gap-2">
-           @if (signatureDataUrl()) {
-            <button (click)="openSignatureModal()" title="Изменить подпись" class="flex flex-col items-center justify-center p-2 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors">
-                <svg class="w-6 h-6 mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" /></svg>
-                <span>Изменить</span>
-            </button>
-            <button (click)="togglePlacementMode()" [class]="isPlacingSignature() ? 'text-indigo-600' : 'text-slate-600'" class="flex flex-col items-center justify-center p-2 text-xs font-medium hover:text-indigo-600 transition-colors" [title]="isPlacingSignature() ? 'Завершить' : 'Добавить'">
-                @if (isPlacingSignature()) {
-                    <svg class="w-6 h-6 mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                    <span>Готово</span>
-                } @else {
-                    <svg class="w-6 h-6 mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    <span>Добавить</span>
-                }
-            </button>
-          } @else {
-            <button (click)="openSignatureModal()" class="flex-grow px-4 py-3 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 transition-colors">Создать подпись</button>
-          }
-          <button (click)="applyAndDownload()" [disabled]="placedSignatures().length === 0" class="flex flex-col items-center justify-center p-2 text-xs font-medium text-slate-600 hover:text-emerald-600 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors" title="Скачать">
-             <svg class="w-6 h-6 mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-             <span>Скачать</span>
-          </button>
-      </div>
+       <!-- Mobile-only Page Navigation -->
+        @if (totalPages() > 1) {
+            <div class="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 flex justify-center items-center gap-2 p-2 rounded-full bg-gray-900/60 backdrop-blur-sm shadow-xl">
+                <button (click)="goToPreviousPage()" [disabled]="currentPage() === 1" class="p-2 rounded-full text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                </button>
+                <span class="text-sm font-medium text-white w-20 text-center">Стр. {{ currentPage() }} / {{ totalPages() }}</span>
+                <button (click)="goToNextPage()" [disabled]="currentPage() === totalPages()" class="p-2 rounded-full text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                </button>
+            </div>
+        }
     }
   </main>
 </div>
 
-  @if (isSigning()) {
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity" (click)="closeSignatureModal()">
-      <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 overflow-hidden" (click)="$event.stopPropagation()">
-        <div class="flex flex-col md:flex-row">
-            <!-- Drawing Area -->
-            <div class="flex-grow p-6 flex flex-col">
-                <h3 class="text-xl font-semibold text-slate-800 mb-4">Создайте вашу подпись</h3>
-                <div class="relative bg-slate-50 rounded-lg flex-grow w-full">
-                    <canvas #signatureCanvas class="w-full h-full min-h-[256px] rounded-lg touch-none"></canvas>
-                </div>
-                <div class="flex justify-between items-center mt-4">
-                    <button (click)="clearSignature()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50 transition-colors">Очистить</button>
-                    <div>
-                        <input type="file" id="upload-signature-image" class="hidden" (change)="onSignatureImageSelected($event)" accept="image/*">
-                        <label for="upload-signature-image" class="text-sm font-medium text-indigo-600 hover:text-indigo-800 cursor-pointer hover:underline">...или загрузите изображение</label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Settings & Actions Panel -->
-            <div class="w-full md:w-64 flex-shrink-0 bg-slate-50 md:border-l border-t md:border-t-0 border-slate-200 p-6 flex flex-col space-y-6">
-                <h4 class="text-base font-semibold text-slate-800">Настройки кисти</h4>
-                
-                <!-- Thickness -->
-                <div>
-                    <label for="pen-thickness" class="block text-sm font-medium text-slate-700 mb-2">Толщина: {{ penThickness().toFixed(1) }}</label>
-                    <input id="pen-thickness" type="range" [value]="penThickness()" (input)="setPenThickness($event)" min="0.5" max="5" step="0.1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-                </div>
-                
-                <!-- Color -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-2">Цвет</label>
-                    <div class="flex items-center justify-between">
-                        @for(color of availablePenColors; track color) {
-                        <button (click)="setPenColor(color)" class="w-9 h-9 rounded-full ring-offset-2 ring-indigo-500 transition-all" [class.ring-2]="penColor() === color" [style.backgroundColor]="color">
-                           @if (penColor() === color) {
-                            <svg class="w-5 h-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
-                           }
-                        </button>
-                        }
-                    </div>
-                </div>
-
-                <div class="flex-grow"></div>
-
-                <!-- Save Button -->
-                <button (click)="saveSignature()" class="w-full px-4 py-3 text-base font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">Сохранить подпись</button>
-            </div>
+@if (isSigning()) {
+<div class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity" (click)="closeSignatureModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 overflow-hidden" (click)="$event.stopPropagation()">
+    <div class="flex flex-col md:flex-row">
+      <!-- Drawing Area -->
+      <div class="flex-grow p-6 flex flex-col">
+        <h3 class="text-xl font-semibold text-gray-800 mb-4">Создайте вашу подпись</h3>
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-4">
+          <button (click)="signatureMode.set('draw')" [class]="signatureMode() === 'draw' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+            Нарисовать
+          </button>
+          <button (click)="signatureMode.set('upload')" [class]="signatureMode() === 'upload' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+            Загрузить
+          </button>
         </div>
-        <button (click)="closeSignatureModal()" class="absolute top-3 right-3 p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-          <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    </div>
-  }
 
-  @if (isCropping()) {
-    <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 text-center">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-2">Обрежьте изображение</h3>
-        <p class="text-sm text-slate-500 mb-4">Выделите мышью область, содержащую только вашу подпись.</p>
-        <div class="w-full h-64 md:h-80 bg-slate-200 rounded-md overflow-hidden flex items-center justify-center">
-            <canvas #croppingCanvas class="touch-none" 
-              (mousedown)="onCropMouseDown($event)" (touchstart)="onCropMouseDown($event)"
-              (mousemove)="onCropMouseMove($event)" (touchmove)="onCropMouseMove($event)"
-              (mouseup)="onCropMouseUp($event)" (touchend)="onCropMouseUp($event)"
-              (mouseleave)="onCropMouseUp($event)"></canvas>
+        @if(signatureMode() === 'draw') {
+        <div class="relative bg-gray-100 rounded-lg flex-grow w-full min-h-[256px]">
+          <canvas #signatureCanvas class="w-full h-full rounded-lg touch-none"></canvas>
         </div>
-        <div class="flex justify-end space-x-3 mt-6">
-            <button (click)="cancelCrop()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50">Отмена</button>
-            <button (click)="applyCropAndSave()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700">Применить и сохранить</button>
+        <div class="flex justify-start items-center mt-4">
+          <button (click)="clearSignature()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 transition-colors">Очистить</button>
         </div>
+        }
+        @if(signatureMode() === 'upload') {
+        <div class="relative bg-gray-100 rounded-lg flex-grow w-full min-h-[256px]">
+          <label for="upload-signature-image" class="flex flex-col items-center justify-center w-full h-full p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-200 cursor-pointer">
+            <svg class="w-12 h-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-700">Загрузите изображение</h3>
+            <p class="mt-1 text-xs text-gray-500">PNG, JPG, GIF</p>
+          </label>
+          <input type="file" id="upload-signature-image" class="hidden" (change)="onSignatureImageSelected($event)" accept="image/*">
+        </div>
+        }
       </div>
-    </div>
-  }
-  
-  @if (isHelpVisible()) {
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" (click)="closeHelpModal()">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-xl mx-4 p-6 relative" (click)="$event.stopPropagation()">
-        <h3 class="text-xl font-semibold text-gray-900 mb-4">Как пользоваться</h3>
-        <ol class="list-decimal list-inside space-y-3 text-slate-600">
-            <li><span class="font-semibold">Загрузите PDF:</span> Нажмите кнопку "Выбрать файл" и выберите PDF-документ с вашего устройства.</li>
-            <li><span class="font-semibold">Создайте подпись:</span> Нажмите "Создать подпись". Вы можете нарисовать её мышью/пальцем или загрузить готовое изображение подписи.</li>
-            <li><span class="font-semibold">Разместите подпись:</span> После создания подписи активируется режим добавления. Просто нажмите на любое место в документе, чтобы разместить подпись.</li>
-            <li><span class="font-semibold">Редактируйте:</span> Вы можете перемещать подпись по странице, а также изменять её размер, потянув за правый нижний угол.</li>
-            <li><span class="font-semibold">Добавьте ещё:</span> Используйте кнопку "Добавить", чтобы снова войти в режим вставки и разместить больше подписей.</li>
-            <li><span class="font-semibold">Скачайте документ:</span> Когда всё будет готово, нажмите "Скачать", чтобы сохранить подписанный PDF-файл.</li>
-        </ol>
-        <button (click)="closeHelpModal()" class="absolute top-3 right-3 p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-            <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    </div>
-  }
 
-  @if (isLoading()) {
-    <div class="fixed inset-0 bg-white bg-opacity-75 flex flex-col items-center justify-center z-[100]">
-      <svg class="animate-spin h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      <!-- Settings & Actions Panel -->
+      @if(signatureMode() === 'draw') {
+      <div class="w-full md:w-64 flex-shrink-0 bg-gray-50 md:border-l border-t md:border-t-0 border-gray-200 p-6 flex flex-col space-y-8">
+        <h4 class="text-base font-semibold text-gray-800">Настройки кисти</h4>
+
+        <!-- Thickness -->
+        <div>
+          <label for="pen-thickness" class="block text-sm font-medium text-gray-700 mb-2">Толщина: {{ penThickness().toFixed(1) }}</label>
+          <input id="pen-thickness" type="range" [value]="penThickness()" (input)="setPenThickness($event)" min="0.5" max="5" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+        </div>
+
+        <!-- Color -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Цвет</label>
+          <div class="flex items-center justify-between">
+            @for(color of availablePenColors; track color) {
+            <button (click)="setPenColor(color)" class="w-10 h-10 rounded-full ring-offset-2 ring-indigo-500 transition-all flex items-center justify-center" [class.ring-2]="penColor() === color" [style.backgroundColor]="color">
+              @if (penColor() === color) {
+              <svg class="w-6 h-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              }
+            </button>
+            }
+          </div>
+        </div>
+
+        <div class="flex-grow"></div>
+
+        <!-- Save Button -->
+        <button (click)="saveSignature()" class="w-full px-4 py-3 text-base font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">Сохранить подпись</button>
+      </div>
+      }
+    </div>
+    <button (click)="closeSignatureModal()" class="absolute top-3 right-3 p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+      <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
       </svg>
-      <p class="mt-4 text-slate-700 font-medium">{{ loadingMessage() }}</p>
+    </button>
+  </div>
+</div>
+}
+
+@if (isCropping()) {
+<div class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 p-6 text-center">
+    <h3 class="text-xl font-medium leading-6 text-gray-900 mb-2">Обрежьте изображение</h3>
+    <p class="text-sm text-gray-500 mb-4">Выделите мышью область, содержащую только вашу подпись.</p>
+    <div class="w-full h-64 md:h-80 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center">
+      <canvas #croppingCanvas class="touch-none" (mousedown)="onCropMouseDown($event)" (touchstart)="onCropMouseDown($event)" (mousemove)="onCropMouseMove($event)" (touchmove)="onCropMouseMove($event)" (mouseup)="onCropMouseUp($event)" (touchend)="onCropMouseUp($event)" (mouseleave)="onCropMouseUp($event)"></canvas>
     </div>
-  }
+    <div class="flex justify-end space-x-3 mt-6">
+      <button (click)="cancelCrop()" class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 transition-colors">Отмена</button>
+      <button (click)="applyCropAndSave()" class="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 transition-colors">Применить и сохранить</button>
+    </div>
+  </div>
+</div>
+}
+
+@if (isHelpVisible()) {
+<div class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50" (click)="closeHelpModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl mx-4 p-6 relative" (click)="$event.stopPropagation()">
+    <h3 class="text-xl font-semibold text-gray-900 mb-4">Как пользоваться</h3>
+    <ol class="list-decimal list-inside space-y-3 text-gray-600">
+      <li><span class="font-semibold">Загрузите PDF:</span> Нажмите кнопку "Выбрать файл" и выберите PDF-документ с вашего устройства.</li>
+      <li><span class="font-semibold">Создайте подпись:</span> Нажмите "Создать подпись". Вы можете нарисовать её мышью/пальцем или загрузить готовое изображение подписи.</li>
+      <li><span class="font-semibold">Разместите подпись:</span> После создания подписи активируется режим добавления. Просто нажмите на любое место в документе, чтобы разместить подпись.</li>
+      <li><span class="font-semibold">Редактируйте:</span> Вы можете перемещать подпись по странице, а также изменять её размер, потянув за правый нижний угол.</li>
+      <li><span class="font-semibold">Добавьте ещё:</span> Используйте кнопку "Добавить", чтобы снова войти в режим вставки и разместить больше подписей.</li>
+      <li><span class="font-semibold">Скачайте документ:</span> Когда всё будет готово, нажмите "Скачать", чтобы сохранить подписанный PDF-файл.</li>
+    </ol>
+    <button (click)="closeHelpModal()" class="absolute top-3 right-3 p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+      <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+      </svg>
+    </button>
+  </div>
+</div>
+}
+
+@if (isLoading()) {
+<div class="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex flex-col items-center justify-center z-[100]">
+  <svg class="animate-spin h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+  <p class="mt-4 text-gray-700 font-medium">{{ loadingMessage() }}</p>
+</div>
+}

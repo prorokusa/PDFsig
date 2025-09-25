@@ -1,5 +1,5 @@
 {
-  "name": "pdf-signature-tool",
+  "name": "copy-of-pdf-signature-tool",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,6 +13,7 @@
     "@angular/compiler": "^20.3.0",
     "@angular/platform-browser": "^20.3.0",
     "@angular/core": "^20.3.0",
+    "@google/genai": "^1.20.0",
     "@angular/build": "^20.3.0",
     "@angular/cli": "^20.3.0",
     "@angular/common": "^20.3.0",

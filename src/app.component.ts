@@ -53,6 +53,7 @@ export class AppComponent {
   placedSignatures = signal<PlacedSignature[]>([]);
 
   isSigning = signal<boolean>(false);
+  signatureMode = signal<'draw' | 'upload'>('draw');
   isCropping = signal<boolean>(false);
   croppingImageUrl = signal<string | null>(null);
   isHelpVisible = signal<boolean>(false);
@@ -226,7 +227,7 @@ export class AppComponent {
   }
 
   initSignaturePad() {
-    if (this.signatureCanvas) {
+    if (this.signatureCanvas && this.signatureMode() === 'draw') {
         const canvas = this.signatureCanvas.nativeElement;
         const ratio = Math.max(window.devicePixelRatio || 1, 1);
         canvas.width = canvas.offsetWidth * ratio;
@@ -370,7 +371,7 @@ export class AppComponent {
 
   placeSignatureOnClick(event: MouseEvent) {
     if (this.interactionOccurred) return;
-    if ((event.target as HTMLElement).closest('.signature-wrapper')) return;
+    if ((event.target as HTMLElement).closest('.signature-wrapper, .pdf-controls')) return;
 
     if (this.isPlacingSignature() && this.signatureDataUrl() && this.trimmedSignatureSize()) {
       const sizeInfo = this.trimmedSignatureSize()!;
@@ -647,7 +648,7 @@ export class AppComponent {
         return;
     }
     this.isLoading.set(true);
-    this.loadingMessage.set('Автоматическая обработка...');
+    this.loadingMessage.set('Обработка подписи...');
 
     setTimeout(async () => {
         try {
@@ -659,27 +660,27 @@ export class AppComponent {
             const cropW = Math.abs(this.cropStartPos!.x - this.cropEndPos!.x) * scaleRatio;
             const cropH = Math.abs(this.cropStartPos!.y - this.cropEndPos!.y) * scaleRatio;
 
-            if (cropW < 1 || cropH < 1) throw new Error('Выделенная область слишком мала.');
+            if (cropW < 10 || cropH < 10) {
+                alert('Выделенная область слишком мала. Пожалуйста, выделите большую область.');
+                return;
+            }
             
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = cropW;
             tempCanvas.height = cropH;
-            const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+            const tempCtx = tempCanvas.getContext('2d');
             if (!tempCtx) throw new Error('Could not create temporary canvas context');
 
             tempCtx.drawImage(this.originalImageForCrop!, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
             
-            const imageData = tempCtx.getImageData(0, 0, cropW, cropH);
-            const cleanedImageData = this._removeBackgroundAutomatically(imageData);
+            const croppedDataUrl = tempCanvas.toDataURL('image/png');
             
-            tempCtx.putImageData(cleanedImageData, 0, 0);
-
-            const cleanedDataUrl = tempCanvas.toDataURL('image/png');
+            const cleanedDataUrl = await this._removeBackgroundAlgorithmically(croppedDataUrl);
             
             await this.finalizeSignature(cleanedDataUrl);
             this.cancelCrop();
         } catch(error) {
-            console.error("Error processing signature automatically:", error);
+            console.error("Error processing signature:", error);
             alert(`Не удалось обработать подпись: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             this.isLoading.set(false);
@@ -687,98 +688,94 @@ export class AppComponent {
     }, 10);
   }
 
-  private _colorDistance(c1: [number, number, number], c2: [number, number, number]): number {
-    const dr = c1[0] - c2[0];
-    const dg = c1[1] - c2[1];
-    const db = c1[2] - c2[2];
-    return Math.sqrt(dr * dr + dg * dg + db * db);
-  }
-
-  private _removeBackgroundAutomatically(imageData: ImageData): ImageData {
-    const { data, width, height } = imageData;
-    if (width === 0 || height === 0) {
-      return new ImageData(new Uint8ClampedArray(0), 0, 0);
-    }
-
-    // --- STEP 1: Find the most dominant color, which we assume is the background paper. ---
-    const colorCounts = new Map<string, number>();
-    for (let i = 0; i < data.length; i += 8) { // Sample pixels for performance
-        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-        if (a > 200) { // Only consider opaque pixels
-            const key = `${r},${g},${b}`;
-            colorCounts.set(key, (colorCounts.get(key) || 0) + 1);
+  private _removeBackgroundAlgorithmically(base64ImageDataUrl: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          return reject(new Error('Could not get canvas context for background removal'));
         }
-    }
-    let backgroundColor: [number, number, number] = [255, 255, 255]; // Default to white
-    if (colorCounts.size > 0) {
-        const mostFrequent = [...colorCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-        backgroundColor = mostFrequent.split(',').map(Number) as [number, number, number];
-    }
-    
-    // --- STEP 2: Find a "seed" point for the signature ink color. ---
-    // We spiral out from the center to find the first pixel that is significantly
-    // different from the background. This is our best guess for the signature's color.
-    let signatureInkColor: [number, number, number] | null = null;
-    const centerX = Math.floor(width / 2);
-    const centerY = Math.floor(height / 2);
+        ctx.drawImage(img, 0, 0);
 
-    for (let r = 0; r < Math.max(centerX, centerY); r++) {
-        // Iterate over a circular path for the given radius
-        const numPoints = r === 0 ? 1 : Math.ceil(2 * Math.PI * r);
-        for (let i = 0; i < numPoints; i++) {
-            const angle = (i / numPoints) * 2 * Math.PI;
-            const x = Math.floor(centerX + r * Math.cos(angle));
-            const y = Math.floor(centerY + r * Math.sin(angle));
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
 
-            if (x >= 0 && x < width && y >= 0 && y < height) {
-                const idx = (y * width + x) * 4;
-                const a = data[idx+3];
-                if (a > 128) { // Make sure the pixel is visible
-                    const currentColor: [number, number, number] = [data[idx], data[idx+1], data[idx+2]];
-                    if (this._colorDistance(currentColor, backgroundColor) > 40) { // Must be different enough from paper
-                        signatureInkColor = currentColor;
-                        break;
-                    }
-                }
+          const getPixel = (x: number, y: number) => {
+            const i = (y * canvas.width + x) * 4;
+            return { r: data[i], g: data[i + 1], b: data[i + 2] };
+          };
+          
+          const cornerPixels = [
+              getPixel(0, 0),
+              getPixel(canvas.width - 1, 0),
+              getPixel(0, canvas.height - 1),
+              getPixel(canvas.width - 1, canvas.height - 1)
+          ];
+
+          const avgBackground = cornerPixels.reduce((acc, p) => ({
+              r: acc.r + p.r / cornerPixels.length,
+              g: acc.g + p.g / cornerPixels.length,
+              b: acc.b + p.b / cornerPixels.length,
+          }), { r: 0, g: 0, b: 0 });
+          
+          const outputImageData = ctx.createImageData(canvas.width, canvas.height);
+          const outputData = outputImageData.data;
+          
+          const colorDistanceThreshold = 80;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const a = data[i + 3];
+
+            if (a < 128) {
+                outputData[i] = 0; outputData[i+1] = 0; outputData[i+2] = 0; outputData[i+3] = 0;
+                continue;
             }
+
+            const distance = Math.sqrt(
+              Math.pow(r - avgBackground.r, 2) +
+              Math.pow(g - avgBackground.g, 2) +
+              Math.pow(b - avgBackground.b, 2)
+            );
+
+            if (distance > colorDistanceThreshold) {
+              // Signature pixel: preserve original color and alpha for smooth edges
+              outputData[i] = r;
+              outputData[i + 1] = g;
+              outputData[i + 2] = b;
+              outputData[i + 3] = a;
+            } else {
+              // Background pixel: make fully transparent
+              outputData[i] = 0; outputData[i+1] = 0; outputData[i+2] = 0; outputData[i+3] = 0;
+            }
+          }
+          
+          const resultCanvas = document.createElement('canvas');
+          resultCanvas.width = canvas.width;
+          resultCanvas.height = canvas.height;
+          const resultCtx = resultCanvas.getContext('2d');
+          if (!resultCtx) return reject(new Error('Could not get final canvas context'));
+          
+          resultCtx.putImageData(outputImageData, 0, 0);
+          resolve(resultCanvas.toDataURL('image/png'));
+
+        } catch (e) {
+          console.error('Error during algorithmic background removal:', e);
+          resolve(base64ImageDataUrl);
         }
-        if (signatureInkColor) break;
-    }
-
-    // If no ink color is found (e.g., blank image), return a transparent image.
-    if (!signatureInkColor) {
-        console.warn("Could not find signature ink color.");
-        return new ImageData(new Uint8ClampedArray(data.length), width, height);
-    }
-
-    // --- STEP 3: The Revolutionary Part - Chroma Keying ---
-    // We create a new image. A pixel is kept only if its color is very similar
-    // to the signature ink color we found. Everything else becomes transparent.
-    const newData = new Uint8ClampedArray(data.length);
-    const colorThreshold = 90; // This is the crucial tuning parameter. Higher = more permissive.
-    
-    for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-        
-        if (a < 100) continue; 
-
-        const currentPixelColor: [number, number, number] = [r, g, b];
-        const distToInk = this._colorDistance(currentPixelColor, signatureInkColor);
-        
-        // This is the core logic: if the pixel's color is close to the ink color, we keep it.
-        // This effectively ignores other elements like black text, which will have a high color distance.
-        if (distToInk < colorThreshold) {
-             const alphaFactor = Math.max(0, 1 - (distToInk / colorThreshold));
-             newData[i] = r;
-             newData[i+1] = g;
-             newData[i+2] = b;
-             // We square the alpha factor to make the edges fade more sharply, which looks cleaner.
-             newData[i+3] = a * (alphaFactor * alphaFactor);
-        }
-        // By default, pixels in newData are transparent (alpha=0), so we don't need an else case.
-    }
-    
-    return new ImageData(newData, width, height);
+      };
+      img.onerror = () => {
+          reject(new Error('Failed to load image for background removal'));
+      };
+      img.src = base64ImageDataUrl;
+    });
   }
 
   // --- Help Modal Methods ---
